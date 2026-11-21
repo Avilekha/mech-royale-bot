@@ -18,6 +18,16 @@ UPGRADE_RANK = [
     "laser_damage", "laser_charge", "lightning_efficiency", "lightning_chain", "mortar_reload", "reactor",
     "capacitor", "lightning_range", "mortar_splash", "jets", "laser_pierce", "mortar_velocity", "sensors",
 ]
+# Tunable behaviour. Change ONE thing per submission to see what helps.
+P = {
+    "retreat_hp": 0.28,      # go hide below this HP fraction when enemies are near
+    "multi_n": 4,            # this many close enemies ...
+    "multi_hp": 0.6,        # ... and HP below this fraction -> hide
+    "backoff": 35,         # back away from an enemy closer than this (m)
+    "approach_d": 85,     # walk toward a lone enemy farther than this (m)
+    "approach_hp": 0.55,     # ... only when HP is above this fraction
+    "approach_max": 2,       # ... and at most this many enemies are close
+}
 WEAPON_RANK = {"laser": 3, "lightning": 2, "mortar": 1, "gun": 0}
 
 
@@ -270,7 +280,7 @@ class Bot:
             if (hpf > 0.8 and not recent_hit) or (not threats and t > self.hide_until and hpf > 0.55):
                 self.mode = "roam"
         else:
-            want_hide = (hpf < 0.4 and (enemies or recent_hit)) or (len(close) >= 3 and hpf < 0.75)
+            want_hide = (hpf < P["retreat_hp"] and (enemies or recent_hit)) or (len(close) >= P["multi_n"] and hpf < P["multi_hp"])
             if want_hide:
                 self.mode = "hide"
                 self.hide_spot = None
@@ -386,11 +396,11 @@ class Bot:
                 self.strafe_until = t + 0.35 + self.rng.random() * 0.7
             px, py = -uy * self.strafe, ux * self.strafe
             rad = 0.0
-            if ed < 55:
+            if ed < P["backoff"]:
                 rad = -1.0
-            elif ed < 80:
+            elif ed < P["backoff"] + 25:
                 rad = -0.3
-            elif ed > 130 and len(close) <= 1 and hpf > 0.7:
+            elif ed > P["approach_d"] and len(close) <= P["approach_max"] and hpf > P["approach_hp"]:
                 rad = 0.7
             vx, vy = px * 0.9 + ux * rad, py * 0.9 + uy * rad
             if len(close) >= 2:  # several of them: head for the zone center while strafing
