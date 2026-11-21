@@ -20,13 +20,16 @@ UPGRADE_RANK = [
 ]
 # Tunable behaviour. Change ONE thing per submission to see what helps.
 P = {
-    "retreat_hp": 0.75,      # go hide below this HP fraction when enemies are near
+    "retreat_hp": 0.60,      # go hide below this HP fraction when enemies are near
     "multi_n": 2,            # this many close enemies ...
-    "multi_hp": 1.01,        # ... and HP below this fraction -> hide
-    "backoff": 95,         # back away from an enemy closer than this (m)
+    "multi_hp": 0.9,        # ... and HP below this fraction -> hide
+    "backoff": 75,         # back away from an enemy closer than this (m)
     "approach_d": 130.0,     # walk toward a lone enemy farther than this (m)
     "approach_hp": 2.0,     # ... only when HP is above this fraction
-    "approach_max": 1,       # ... and at most this many enemies are close
+    "approach_max": 1,
+    "loot_r": 50.0,         # walk this far (m) to a known weapon pickup
+    "npc_r": 0.0,           # hunt drones within this range (0 = never)
+    "crate_r": 0.0,         # shoot crates within this range (0 = never)       # ... and at most this many enemies are close
 }
 WEAPON_RANK = {"laser": 3, "lightning": 2, "mortar": 1, "gun": 0}
 
@@ -313,12 +316,12 @@ class Bot:
                 tkind = "mech"
         if target is None and not enemies and npcs and hpf > 0.6:
             n0 = min(npcs, key=lambda m: hyp(m["pos"], (x, y)))
-            if hyp(n0["pos"], (x, y)) < 70 and (self.W is None or self.W.los(self.eye(me["pos"]), self.center(n0))):
+            if hyp(n0["pos"], (x, y)) < P["npc_r"] and (self.W is None or self.W.los(self.eye(me["pos"]), self.center(n0))):
                 target, tkind = n0, "npc"
         crate = None
         if target is None and not enemies and obs["crates"] and hpf > 0.6 and in_safe:
             c0 = min(obs["crates"], key=lambda c: hyp(c["pos"], (x, y)))
-            if hyp(c0["pos"], (x, y)) < 55 and (self.W is None or self.W.los(self.eye(me["pos"]), [c0["pos"][0], c0["pos"][1], c0["pos"][2] + 1])):
+            if hyp(c0["pos"], (x, y)) < P["crate_r"] and (self.W is None or self.W.los(self.eye(me["pos"]), [c0["pos"][0], c0["pos"][1], c0["pos"][2] + 1])):
                 crate = c0
 
         muz = [x, y, z + 7 * (1 + 0.05 * me["cubes"])]
@@ -422,7 +425,7 @@ class Bot:
                     if p["kind"] == "gun" or p["kind"] in slots or r <= cur_rank:
                         continue
                     d = hyp(p["pos"], (x, y))
-                    if d < 260 and math.hypot(p["pos"][0] - tcen[0], p["pos"][1] - tcen[1]) < trad * 0.85 and d - 15 * r < bs:
+                    if d < P["loot_r"] and math.hypot(p["pos"][0] - tcen[0], p["pos"][1] - tcen[1]) < trad * 0.85 and d - 15 * r < bs:
                         bs, bestp = d - 15 * r, p
                 if bestp is not None:
                     lootgoal = bestp["pos"]
