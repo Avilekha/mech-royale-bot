@@ -27,7 +27,7 @@ P = {
     "approach_d": 130.0,     # walk toward a lone enemy farther than this (m)
     "approach_hp": 2.0,     # ... only when HP is above this fraction
     "approach_max": 1,
-    "fight_boost": 1,        # 1 = boost-strafe while enemies are close (energy regenerates fast)
+    "fight_boost": 0,        # 1 = boost-strafe while enemies are close (energy regenerates fast)
     "loot_r": 260.0,         # walk this far (m) to a known weapon pickup
     "npc_r": 70.0,           # hunt drones within this range (0 = never)
     "crate_r": 55.0,         # shoot crates within this range (0 = never)       # ... and at most this many enemies are close
@@ -350,9 +350,13 @@ class Bot:
             if "laser" in slots and tkind == "mech":
                 li, lw = slots["laser"]
                 ch = lw.get("charge", 0) or 0
-                cond = 25 < d < lw["stats"]["range"] * 0.9 and len(close) <= 2 and hpf > 0.45 and ey < tol * 3
-                if cond or (ch > 0 and ey < tol * 6):
-                    fire[li] = True
+                full = lw["stats"].get("charge", 0.75)
+                if ch >= full * 0.97:
+                    pass  # release the trigger now: the beam fires on release (holding longer just wastes time)
+                else:
+                    cond = 40 < d < lw["stats"]["range"] * 0.9 and len(close) <= 1 and hpf > 0.5 and ey < tol * 3 and (lw.get("cooldown", 0) or 0) <= 0.05
+                    if cond or (ch > 0 and ey < tol * 6 and d > 25):
+                        fire[li] = True
             if "mortar" in slots and tkind == "mech" and 50 < d < 200:
                 mi, mw = slots["mortar"]
                 ws = cfg["weapons"]["mortar"]
