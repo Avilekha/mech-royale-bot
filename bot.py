@@ -20,10 +20,10 @@ UPGRADE_RANK = [
 ]
 # Tunable behaviour. Change ONE thing per submission to see what helps.
 P = {
-    "retreat_hp": 0.60,      # go hide below this HP fraction when enemies are near
+    "retreat_hp": 0.75,      # go hide below this HP fraction when enemies are near
     "multi_n": 2,            # this many close enemies ...
-    "multi_hp": 0.9,        # ... and HP below this fraction -> hide
-    "backoff": 75,         # back away from an enemy closer than this (m)
+    "multi_hp": 1.01,        # ... and HP below this fraction -> hide
+    "backoff": 95,         # back away from an enemy closer than this (m)
     "approach_d": 130.0,     # walk toward a lone enemy farther than this (m)
     "approach_hp": 2.0,     # ... only when HP is above this fraction
     "approach_max": 1,       # ... and at most this many enemies are close
