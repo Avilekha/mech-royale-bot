@@ -1,4 +1,4 @@
-"""First improved Mech Royale bot: prioritize the safe zone and avoid nearby mechs."""
+"""Mech Royale bot v2: starter-kit behavior plus cautious survival improvements."""
 import math
 import mechfight as mf
 
@@ -11,87 +11,105 @@ def unit(x, y):
 
 
 class Bot:
-    name = "survival-py-v1"
+    name = "survival-py-v2"
 
     def __init__(self, hello: mf.Hello):
-        self.pickup_radius = hello["config"]["loot"]["pickup_radius"]
+        self.reach = hello["config"]["loot"]["pickup_radius"]
 
     def act(self, obs: mf.Observation) -> mf.Action:
         me = obs["self"]
         x, y, z = me["pos"]
-        zone = obs["zone"]
-        next_x, next_y = zone["next_center"]
-        next_radius = zone["next_radius"]
-
+        goal = obs["zone"]["next_center"]
         action: mf.Action = {"tick": obs["tick"]}
 
-        # Pick a defensive upgrade when one is offered; otherwise use choice 0.
+        # Prefer defensive upgrades when offered; otherwise keep the starter default.
         offer = obs.get("offer")
         if offer:
             choices = offer.get("choices", [])
             defensive_words = ("armor", "health", "regen", "repair", "shield")
             chosen = 0
             for i, choice in enumerate(choices):
-                label = (choice.get("id", "") + " " + choice.get("name", "") + " " + choice.get("desc", "")).lower()
+                label = (
+                    str(choice.get("id", "")) + " "
+                    + str(choice.get("name", "")) + " "
+                    + str(choice.get("desc", ""))
+                ).lower()
                 if any(word in label for word in defensive_words):
                     chosen = i
                     break
             action["pick"] = chosen
 
-        # Move toward the next safe circle only when outside a comfortable buffer.
-        to_zone_x = next_x - x
-        to_zone_y = next_y - y
-        zone_distance = math.hypot(to_zone_x, to_zone_y)
-        move_x = 0.0
-        move_y = 0.0
-        if zone_distance > next_radius * 0.72:
-            move_x, move_y = unit(to_zone_x, to_zone_y)
+        # Restore the starter bot's weapon pickup behavior.
+        near = [
+            p for p in obs.get("pickups", [])
+            if math.dist(p["pos"][:2], (x, y)) < self.reach
+        ]
+        weapons = me.get("weapons", [None, None])
+        if len(weapons) > 1 and weapons[1] is None and near:
+            if near[0]["kind"] != "gun":
+                action["take"] = near[0]["id"]
 
-        # Create space from nearby enemies instead of charging directly into them.
-        enemies = [m for m in obs.get("mechs", []) if m.get("kind") == "mech"]
-        escape_x = 0.0
-        escape_y = 0.0
+        # Keep moving toward the next zone, as the original starter bot did.
+        to_goal_x = goal[0] - x
+        to_goal_y = goal[1] - y
+        move_x, move_y = unit(to_goal_x, to_goal_y)
+
+        # Small emergency dodge only when an enemy mech gets very close.
+        enemies = [
+            m for m in obs.get("mechs", [])
+            if m.get("kind") == "mech"
+        ]
+        nearest = None
+        nearest_distance = float("inf")
         for enemy in enemies:
             ex, ey = enemy["pos"][:2]
-            dx = x - ex
-            dy = y - ey
-            distance = max(math.hypot(dx, dy), 1.0)
-            if distance < 55.0:
-                # Closer enemies exert a stronger push away from us.
-                weight = (55.0 - distance) / 55.0
-                escape_x += (dx / distance) * weight
-                escape_y += (dy / distance) * weight
+            distance = math.hypot(ex - x, ey - y)
+            if distance < nearest_distance:
+                nearest_distance = distance
+                nearest = (ex, ey)
 
-        move_x += escape_x * 1.25
-        move_y += escape_y * 1.25
-        move_x, move_y = unit(move_x, move_y)
-        action["move"] = [move_x, move_y]
+        if nearest is not None and nearest_distance < 24.0:
+            away_x, away_y = unit(x - nearest[0], y - nearest[1])
+            move_x, move_y = unit(
+                move_x + away_x * 0.65,
+                move_y + away_y * 0.65,
+            )
 
-        # Save boost energy unless we're outside the current zone or far from safety.
-        outside_current = not me.get("in_zone", True)
-        needs_urgent_travel = zone_distance > next_radius * 0.9
-        energy = me.get("energy", 100)
-        action["boost"] = bool((outside_current or needs_urgent_travel) and energy > 25)
-
-        # Keep the simple starter targeting for now; we'll improve leading/weapon logic next.
-        targets = sorted(
-            obs.get("mechs", []),
-            key=lambda target: math.dist(target["pos"], me["pos"]),
+        # Restore periodic jumping and the starter's zone-based boost.
+        action.update(
+            move=[move_x, move_y],
+            boost=not me["in_zone"],
+            jump=bool(me.get("grounded", False) and obs["tick"] % 40 == 0),
         )
-        if targets:
-            target = targets[0]["pos"]
-            horizontal_distance = math.dist(target[:2], (x, y))
-            yaw = math.atan2(target[1] - y, target[0] - x)
-            pitch = math.atan2(target[2] - z - 2.5, max(horizontal_distance, 0.1))
-            action["aim"] = [yaw, pitch]
-            action["fire"] = [True, True]
-        else:
-            # Look toward the safe area when no target is visible.
-            action["aim"] = [math.atan2(to_zone_y, to_zone_x), 0.0]
-            action["fire"] = [False, False]
 
-        mf.draw.point([next_x, next_y, z], "#40c0ff", 6)
-        mf.draw.label(f"hp {me.get('hp', 0):.0f} · zone {zone_distance:.0f}m · {len(enemies)} mechs")
+        # Aim at the nearest visible mech; otherwise face the next zone.
+        yaw = math.atan2(to_goal_y, to_goal_x)
+        action["aim"] = [yaw, 0.0]
+        action["fire"] = [False, False]
+        if enemies:
+            target = min(
+                enemies,
+                key=lambda m: math.dist(m["pos"], me["pos"]),
+            )["pos"]
+            horizontal_distance = max(math.dist(target[:2], (x, y)), 0.1)
+            aim = [
+                math.atan2(target[1] - y, target[0] - x),
+                math.atan2(target[2] - z - 2.5, horizontal_distance),
+            ]
+            action.update(aim=aim, fire=[True, True])
+            mf.draw.line(
+                [x, y, z + 7],
+                [target[0], target[1], target[2] + 4.5],
+                "#ff5040",
+            )
+
+        mf.draw.point([goal[0], goal[1], z], "#40c0ff", 6)
+        mf.draw.label(
+            f"hp {me['hp']:.0f} · {len(enemies)} mechs · "
+            f"nearest {nearest_distance:.0f}m"
+            if nearest is not None
+            else f"hp {me['hp']:.0f} · {len(enemies)} mechs"
+        )
         return action
 
 
