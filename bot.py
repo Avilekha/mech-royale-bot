@@ -27,9 +27,10 @@ P = {
     "approach_d": 130.0,     # walk toward a lone enemy farther than this (m)
     "approach_hp": 2.0,     # ... only when HP is above this fraction
     "approach_max": 1,
-    "loot_r": 50.0,         # walk this far (m) to a known weapon pickup
-    "npc_r": 0.0,           # hunt drones within this range (0 = never)
-    "crate_r": 0.0,         # shoot crates within this range (0 = never)       # ... and at most this many enemies are close
+    "fight_boost": 1,        # 1 = boost-strafe while enemies are close (energy regenerates fast)
+    "loot_r": 260.0,         # walk this far (m) to a known weapon pickup
+    "npc_r": 70.0,           # hunt drones within this range (0 = never)
+    "crate_r": 55.0,         # shoot crates within this range (0 = never)       # ... and at most this many enemies are close
 }
 WEAPON_RANK = {"laser": 3, "lightning": 2, "mortar": 1, "gun": 0}
 
@@ -119,6 +120,7 @@ class Bot:
         self.take_cd = 0.0
         self.mem = {}
         self.pk = {}
+        self.bst = False
 
     # ------------------------------------------------------------------ helpers
     def steer(self, me, vx, vy, look=7.0):
@@ -495,6 +497,17 @@ class Bot:
                     mv = (ax / an, ay / an)
                     boost = me["energy"] > 20
                     break
+
+        # ---- boost-strafe in fights (boost 19.5 m/s vs walk 11.7; energy regen 18/s vs drain 17/s)
+        if P["fight_boost"] and close and self.mode in ("fight", "hide"):
+            if self.bst and me["energy"] < 12:
+                self.bst = False
+            elif not self.bst and me["energy"] > 45:
+                self.bst = True
+            if self.bst and (mv[0] or mv[1]):
+                boost = True
+        else:
+            self.bst = False
 
         # ---- unstick
         if self.last_pos is not None:
